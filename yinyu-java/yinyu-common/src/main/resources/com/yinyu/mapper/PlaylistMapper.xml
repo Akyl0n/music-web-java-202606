@@ -1,0 +1,152 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yinyu.mapper.PlaylistMapper">
+
+    <sql id="BaseColumns">
+        id, name, subtitle, cover, category, tags, intro, status, recommend_flag, song_count,
+        play_count, favorite_count, remark, create_time, update_time
+    </sql>
+
+    <select id="selectPage" resultType="com.yinyu.entity.po.Playlist">
+        select <include refid="BaseColumns"/>
+        from playlist
+        <where>
+            <if test="keyword != null and keyword != ''">
+                and (
+                    name like concat('%', #{keyword}, '%')
+                    or ifnull(subtitle, '') like concat('%', #{keyword}, '%')
+                    or ifnull(tags, '') like concat('%', #{keyword}, '%')
+                    or ifnull(intro, '') like concat('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="category != null and category != ''">
+                and category = #{category}
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+        </where>
+        order by update_time desc, id desc
+        limit #{offset}, #{limit}
+    </select>
+
+    <select id="countPage" resultType="java.lang.Long">
+        select count(1)
+        from playlist
+        <where>
+            <if test="keyword != null and keyword != ''">
+                and (
+                    name like concat('%', #{keyword}, '%')
+                    or ifnull(subtitle, '') like concat('%', #{keyword}, '%')
+                    or ifnull(tags, '') like concat('%', #{keyword}, '%')
+                    or ifnull(intro, '') like concat('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="category != null and category != ''">
+                and category = #{category}
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectById" resultType="com.yinyu.entity.po.Playlist">
+        select <include refid="BaseColumns"/>
+        from playlist
+        where id = #{id}
+        limit 1
+    </select>
+
+    <select id="selectByIds" resultType="com.yinyu.entity.po.Playlist">
+        select <include refid="BaseColumns"/>
+        from playlist
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="selectEnabledHomeList" resultType="com.yinyu.entity.po.Playlist">
+        select <include refid="BaseColumns"/>
+        from playlist
+        where status = 'enabled'
+        order by recommend_flag desc, favorite_count desc, play_count desc, update_time desc, id desc
+        limit #{limit}
+    </select>
+
+    <select id="countByName" resultType="java.lang.Integer">
+        select count(1)
+        from playlist
+        where name = #{name}
+        <if test="excludeId != null">
+            and id != #{excludeId}
+        </if>
+    </select>
+
+    <insert id="insert" parameterType="com.yinyu.entity.po.Playlist" useGeneratedKeys="true" keyProperty="id">
+        insert into playlist(
+            name, subtitle, cover, category, tags, intro, status, recommend_flag, song_count, remark
+        ) values (
+            #{name}, #{subtitle}, #{cover}, #{category}, #{tags}, #{intro}, #{status}, #{recommendFlag}, #{songCount}, #{remark}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.yinyu.entity.po.Playlist">
+        update playlist
+        set name = #{name},
+            subtitle = #{subtitle},
+            cover = #{cover},
+            category = #{category},
+            tags = #{tags},
+            intro = #{intro},
+            status = #{status},
+            recommend_flag = #{recommendFlag},
+            song_count = #{songCount},
+            remark = #{remark}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from playlist
+        where id = #{id}
+    </delete>
+
+    <update id="updateStatus">
+        update playlist
+        set status = #{status}
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <delete id="deletePlaylistSongsByPlaylistId">
+        delete from playlist_song
+        where playlist_id = #{playlistId}
+    </delete>
+
+    <insert id="batchInsertPlaylistSongs">
+        insert into playlist_song(playlist_id, song_id, sort_num)
+        values
+        <foreach collection="songIds" item="songId" index="index" separator=",">
+            (#{playlistId}, #{songId}, #{index} + 1)
+        </foreach>
+    </insert>
+
+    <select id="selectSongIdsByPlaylistId" resultType="java.lang.Long">
+        select song_id
+        from playlist_song
+        where playlist_id = #{playlistId}
+        order by sort_num asc, id asc
+    </select>
+
+    <update id="updateFavoriteCount">
+        update playlist
+        set favorite_count = greatest(ifnull(favorite_count, 0) + #{delta}, 0)
+        where id = #{id}
+    </update>
+
+</mapper>

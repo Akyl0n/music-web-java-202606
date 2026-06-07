@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yinyu.mapper.UserActionMapper">
+
+    <sql id="BaseColumns">
+        id, user_id, action_type, target_id, action_time, progress_seconds, create_time, update_time
+    </sql>
+
+    <select id="selectByUserIdAndTypeAndTargetId" resultType="com.yinyu.entity.po.UserAction">
+        select <include refid="BaseColumns"/>
+        from user_action
+        where user_id = #{userId}
+          and action_type = #{actionType}
+          and target_id = #{targetId}
+        limit 1
+    </select>
+
+    <insert id="insert" parameterType="com.yinyu.entity.po.UserAction" useGeneratedKeys="true" keyProperty="id">
+        insert into user_action(
+            user_id, action_type, target_id, action_time, progress_seconds
+        ) values (
+            #{userId}, #{actionType}, #{targetId}, #{actionTime}, #{progressSeconds}
+        )
+    </insert>
+
+    <update id="updateAction" parameterType="com.yinyu.entity.po.UserAction">
+        update user_action
+        set action_time = #{actionTime},
+            progress_seconds = #{progressSeconds}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteByUserIdAndTypeAndTargetId">
+        delete from user_action
+        where user_id = #{userId}
+          and action_type = #{actionType}
+          and target_id = #{targetId}
+    </delete>
+
+    <select id="countByUserIdAndType" resultType="java.lang.Long">
+        select count(1)
+        from user_action
+        where user_id = #{userId}
+          and action_type = #{actionType}
+    </select>
+
+    <select id="countByType" resultType="java.lang.Long">
+        select count(1)
+        from user_action
+        where action_type = #{actionType}
+    </select>
+
+    <select id="selectTargetIdsByUserIdAndType" resultType="java.lang.Long">
+        select target_id
+        from user_action
+        where user_id = #{userId}
+          and action_type = #{actionType}
+        order by action_time desc, id desc
+        <if test="limit != null">
+            limit #{limit}
+        </if>
+    </select>
+
+</mapper>

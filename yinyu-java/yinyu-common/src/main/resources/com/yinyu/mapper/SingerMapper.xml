@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yinyu.mapper.SingerMapper">
+
+    <sql id="BaseColumns">
+        id, name, gender, birthday, region, type, avatar, intro, tags, letter, status, remark, create_time, update_time
+    </sql>
+
+    <select id="selectPage" resultType="com.yinyu.entity.po.Singer">
+        select <include refid="BaseColumns"/>
+        from artist
+        <where>
+            <if test="keyword != null and keyword != ''">
+                and (
+                    name like concat('%', #{keyword}, '%')
+                    or ifnull(tags, '') like concat('%', #{keyword}, '%')
+                    or ifnull(intro, '') like concat('%', #{keyword}, '%')
+                    or ifnull(region, '') like concat('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="gender != null and gender != ''">
+                and gender = #{gender}
+            </if>
+            <if test="region != null and region != ''">
+                and region = #{region}
+            </if>
+            <if test="letter != null and letter != ''">
+                and upper(ifnull(letter, '#')) = upper(#{letter})
+            </if>
+            <if test="tag != null and tag != ''">
+                and find_in_set(#{tag}, replace(ifnull(tags, ''), '，', ','))
+            </if>
+            <if test="type != null and type != ''">
+                and type = #{type}
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+        </where>
+        order by update_time desc, id desc
+        limit #{offset}, #{limit}
+    </select>
+
+    <select id="countPage" resultType="java.lang.Long">
+        select count(1)
+        from artist
+        <where>
+            <if test="keyword != null and keyword != ''">
+                and (
+                    name like concat('%', #{keyword}, '%')
+                    or ifnull(tags, '') like concat('%', #{keyword}, '%')
+                    or ifnull(intro, '') like concat('%', #{keyword}, '%')
+                    or ifnull(region, '') like concat('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="gender != null and gender != ''">
+                and gender = #{gender}
+            </if>
+            <if test="region != null and region != ''">
+                and region = #{region}
+            </if>
+            <if test="letter != null and letter != ''">
+                and upper(ifnull(letter, '#')) = upper(#{letter})
+            </if>
+            <if test="tag != null and tag != ''">
+                and find_in_set(#{tag}, replace(ifnull(tags, ''), '，', ','))
+            </if>
+            <if test="type != null and type != ''">
+                and type = #{type}
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectById" resultType="com.yinyu.entity.po.Singer">
+        select <include refid="BaseColumns"/>
+        from artist
+        where id = #{id}
+        limit 1
+    </select>
+
+    <select id="selectEnabledHomeList" resultType="com.yinyu.entity.po.Singer">
+        select <include refid="BaseColumns"/>
+        from artist
+        where status = 'enabled'
+        order by update_time desc, id desc
+        limit #{limit}
+    </select>
+
+    <select id="countByName" resultType="java.lang.Integer">
+        select count(1)
+        from artist
+        where name = #{name}
+        <if test="excludeId != null">
+            and id != #{excludeId}
+        </if>
+    </select>
+
+    <insert id="insert" parameterType="com.yinyu.entity.po.Singer" useGeneratedKeys="true" keyProperty="id">
+        insert into artist(
+            name, gender, birthday, region, type, avatar, intro, tags, letter, status, remark
+        ) values (
+            #{name}, #{gender}, #{birthday}, #{region}, #{type}, #{avatar}, #{intro}, #{tags}, #{letter}, #{status}, #{remark}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.yinyu.entity.po.Singer">
+        update artist
+        set name = #{name},
+            gender = #{gender},
+            birthday = #{birthday},
+            region = #{region},
+            type = #{type},
+            avatar = #{avatar},
+            intro = #{intro},
+            tags = #{tags},
+            letter = #{letter},
+            status = #{status},
+            remark = #{remark}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from artist
+        where id = #{id}
+    </delete>
+
+    <update id="updateStatus">
+        update artist
+        set status = #{status}
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+</mapper>

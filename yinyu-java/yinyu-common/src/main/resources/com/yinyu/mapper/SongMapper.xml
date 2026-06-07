@@ -1,0 +1,170 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yinyu.mapper.SongMapper">
+
+    <sql id="BaseColumns">
+        id, name, subtitle, singer_id, singer_name, category, tags, cover, audio_url, duration_seconds,
+        language, intro, release_date, status, recommend_flag, play_count, like_count, favorite_count,
+        remark, create_time, update_time
+    </sql>
+
+    <select id="selectPage" resultType="com.yinyu.entity.po.Song">
+        select <include refid="BaseColumns"/>
+        from song
+        <where>
+            <if test="keyword != null and keyword != ''">
+                and (
+                    name like concat('%', #{keyword}, '%')
+                    or ifnull(subtitle, '') like concat('%', #{keyword}, '%')
+                    or ifnull(singer_name, '') like concat('%', #{keyword}, '%')
+                    or ifnull(tags, '') like concat('%', #{keyword}, '%')
+                    or ifnull(category, '') like concat('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="singerId != null">
+                and singer_id = #{singerId}
+            </if>
+            <if test="category != null and category != ''">
+                and category = #{category}
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+        </where>
+        order by id desc
+        limit #{offset}, #{limit}
+    </select>
+
+    <select id="countPage" resultType="java.lang.Long">
+        select count(1)
+        from song
+        <where>
+            <if test="keyword != null and keyword != ''">
+                and (
+                    name like concat('%', #{keyword}, '%')
+                    or ifnull(subtitle, '') like concat('%', #{keyword}, '%')
+                    or ifnull(singer_name, '') like concat('%', #{keyword}, '%')
+                    or ifnull(tags, '') like concat('%', #{keyword}, '%')
+                    or ifnull(category, '') like concat('%', #{keyword}, '%')
+                )
+            </if>
+            <if test="singerId != null">
+                and singer_id = #{singerId}
+            </if>
+            <if test="category != null and category != ''">
+                and category = #{category}
+            </if>
+            <if test="status != null and status != ''">
+                and status = #{status}
+            </if>
+        </where>
+    </select>
+
+    <select id="selectById" resultType="com.yinyu.entity.po.Song">
+        select <include refid="BaseColumns"/>
+        from song
+        where id = #{id}
+        limit 1
+    </select>
+
+    <select id="selectByIds" resultType="com.yinyu.entity.po.Song">
+        select <include refid="BaseColumns"/>
+        from song
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
+    <select id="selectEnabledRankingList" resultType="com.yinyu.entity.po.Song">
+        select <include refid="BaseColumns"/>
+        from song
+        where status = 'enabled'
+    </select>
+
+    <select id="selectEnabledHomeList" resultType="com.yinyu.entity.po.Song">
+        select <include refid="BaseColumns"/>
+        from song
+        where status = 'enabled'
+        order by recommend_flag desc, play_count desc, favorite_count desc, update_time desc, id desc
+        limit #{limit}
+    </select>
+
+    <select id="selectFirstEnabledBySingerId" resultType="com.yinyu.entity.po.Song">
+        select <include refid="BaseColumns"/>
+        from song
+        where singer_id = #{singerId}
+          and status = 'enabled'
+        order by recommend_flag desc, play_count desc, favorite_count desc, update_time desc, id desc
+        limit 1
+    </select>
+
+    <select id="countByNameAndSingerId" resultType="java.lang.Integer">
+        select count(1)
+        from song
+        where name = #{name}
+          and singer_id = #{singerId}
+        <if test="excludeId != null">
+            and id != #{excludeId}
+        </if>
+    </select>
+
+    <insert id="insert" parameterType="com.yinyu.entity.po.Song" useGeneratedKeys="true" keyProperty="id">
+        insert into song(
+            name, subtitle, singer_id, singer_name, category, tags, cover, audio_url, duration_seconds,
+            language, intro, release_date, status, recommend_flag, remark
+        ) values (
+            #{name}, #{subtitle}, #{singerId}, #{singerName}, #{category}, #{tags}, #{cover}, #{audioUrl},
+            #{durationSeconds}, #{language}, #{intro}, #{releaseDate}, #{status}, #{recommendFlag}, #{remark}
+        )
+    </insert>
+
+    <update id="update" parameterType="com.yinyu.entity.po.Song">
+        update song
+        set name = #{name},
+            subtitle = #{subtitle},
+            singer_id = #{singerId},
+            singer_name = #{singerName},
+            category = #{category},
+            tags = #{tags},
+            cover = #{cover},
+            audio_url = #{audioUrl},
+            duration_seconds = #{durationSeconds},
+            language = #{language},
+            intro = #{intro},
+            release_date = #{releaseDate},
+            status = #{status},
+            recommend_flag = #{recommendFlag},
+            remark = #{remark}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from song
+        where id = #{id}
+    </delete>
+
+    <update id="updateStatus">
+        update song
+        set status = #{status}
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <update id="updateLikeCount">
+        update song
+        set like_count = greatest(ifnull(like_count, 0) + #{delta}, 0)
+        where id = #{id}
+    </update>
+
+    <update id="updatePlayCount">
+        update song
+        set play_count = greatest(ifnull(play_count, 0) + #{delta}, 0)
+        where id = #{id}
+    </update>
+
+</mapper>

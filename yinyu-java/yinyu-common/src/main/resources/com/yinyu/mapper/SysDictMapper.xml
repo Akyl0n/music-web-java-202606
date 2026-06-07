@@ -1,0 +1,128 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yinyu.mapper.SysDictMapper">
+
+    <sql id="BaseColumns">
+        id, parent_id, dict_code, dict_name, sort_num, status, remark
+    </sql>
+
+    <select id="selectTypeList" resultType="com.yinyu.entity.po.SysDict">
+        select
+        <include refid="BaseColumns"/>
+        from sys_dict
+        where parent_id = 0
+        <if test="keyword != null and keyword != ''">
+            and (
+            dict_code like concat('%', #{keyword}, '%')
+            or dict_name like concat('%', #{keyword}, '%')
+            or ifnull(remark, '') like concat('%', #{keyword}, '%')
+            )
+        </if>
+        order by sort_num asc, id asc
+    </select>
+
+    <select id="selectItemList" resultType="com.yinyu.entity.po.SysDict">
+        select
+        <include refid="BaseColumns"/>
+        from sys_dict
+        where parent_id = #{parentId}
+        <if test="keyword != null and keyword != ''">
+            and (
+            dict_code like concat('%', #{keyword}, '%')
+            or dict_name like concat('%', #{keyword}, '%')
+            or ifnull(remark, '') like concat('%', #{keyword}, '%')
+            )
+        </if>
+        order by sort_num asc, id asc
+    </select>
+
+    <select id="selectById" resultType="com.yinyu.entity.po.SysDict">
+        select
+        <include refid="BaseColumns"/>
+        from sys_dict
+        where id = #{id}
+        limit 1
+    </select>
+
+    <select id="countByParentIdAndCode" resultType="java.lang.Integer">
+        select count(1)
+        from sys_dict
+        where parent_id = #{parentId}
+        and dict_code = #{dictCode}
+        <if test="excludeId != null">
+            and id != #{excludeId}
+        </if>
+    </select>
+
+    <select id="selectMaxSortNumByParentId" resultType="java.lang.Integer">
+        select ifnull(max(sort_num), 0)
+        from sys_dict
+        where parent_id = #{parentId}
+    </select>
+
+    <insert id="insert" parameterType="com.yinyu.entity.po.SysDict" useGeneratedKeys="true" keyProperty="id">
+        insert into sys_dict(parent_id, dict_code, dict_name, sort_num, status, remark)
+        values(#{parentId}, #{dictCode}, #{dictName}, #{sortNum}, #{status}, #{remark})
+    </insert>
+
+    <update id="update" parameterType="com.yinyu.entity.po.SysDict">
+        update sys_dict
+        set parent_id = #{parentId},
+        dict_code = #{dictCode},
+        dict_name = #{dictName},
+        status = #{status},
+        remark = #{remark}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from sys_dict
+        where id = #{id}
+    </delete>
+
+    <delete id="deleteByParentId">
+        delete from sys_dict
+        where parent_id = #{parentId}
+    </delete>
+
+    <update id="updateSort">
+        update sys_dict
+        set sort_num = #{sortNum}
+        where id = #{id}
+    </update>
+
+    <select id="selectEnabledTypes" resultType="com.yinyu.entity.po.SysDict">
+        select
+        <include refid="BaseColumns"/>
+        from sys_dict
+        where parent_id = 0
+        and status = 'enabled'
+        <if test="code != null and code != ''">
+            and dict_code = #{code}
+        </if>
+        order by sort_num asc, id asc
+    </select>
+
+    <select id="selectEnabledItems" resultType="com.yinyu.entity.po.SysDict">
+        select
+        <include refid="BaseColumns"/>
+        from sys_dict
+        where parent_id = #{parentId}
+        and status = 'enabled'
+        order by sort_num asc, id asc
+    </select>
+
+    <select id="selectEnabledItemsByTypeCode" resultType="com.yinyu.entity.po.SysDict">
+        select
+        <include refid="BaseColumns"/>
+        from sys_dict
+        where parent_id in (
+        select id from sys_dict where parent_id = 0 and dict_code = #{typeCode}
+        )
+        and status = 'enabled'
+        order by sort_num asc, id asc
+    </select>
+
+</mapper>

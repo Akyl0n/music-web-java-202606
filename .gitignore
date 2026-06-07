@@ -1,0 +1,86 @@
+# =========================
+# Root ignore rules
+# Keep source code and necessary config files
+# Ignore build output, IDE files, logs, caches and local runtime data
+# =========================
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE / editor
+.idea/
+.vscode/
+*.iml
+*.suo
+*.user
+*.userossc
+*.sln.docstates
+*.swp
+*.swo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Java / Maven
+**/target/
+**/out/
+**/.flattened-pom.xml
+
+# Node / Frontend
+**/node_modules/
+**/dist/
+**/dist-ssr/
+**/coverage/
+**/.eslintcache
+**/*.tsbuildinfo
+**/*.timestamp-*-*.mjs
+
+# Local env files
+*.local
+.env.local
+.env.*.local
+
+# Runtime / upload files
+uploads/
+temp/
+tmp/
+
+# Package manager cache files
+.pnpm-store/
+.npm/
+.yarn/
+
+# Keep dependency lock files and project configs tracked
+!package-lock.json
+!**/package-lock.json
+!package.json
+!**/package.json
+!pom.xml
+!**/pom.xml
+!README.md
+!**/README.md
+!*.sql
+!**/*.sql
+!**/src/**
+!**/public/**
+!**/*.yml
+!**/*.yaml
+!**/*.xml
+!**/*.properties
+!**/*.json
+!**/*.js
+!**/*.vue
+!**/*.scss
+!**/*.css
+!**/*.html
+!**/*.java
+!**/*.md
+!**/*.ttf
+!**/*.ico

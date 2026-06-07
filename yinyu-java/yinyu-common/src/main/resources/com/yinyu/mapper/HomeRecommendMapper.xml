@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yinyu.mapper.HomeRecommendMapper">
+
+    <sql id="BaseColumns">
+        id, position_code, target_type, target_id, cover, sort_num, status, create_time, update_time
+    </sql>
+
+    <select id="selectPage" resultType="com.yinyu.entity.po.HomeRecommend">
+        select
+        <include refid="BaseColumns"/>
+        from home_recommend
+        where 1 = 1
+        <if test="positionCode != null and positionCode != ''">
+            and position_code = #{positionCode}
+        </if>
+        <if test="targetType != null and targetType != ''">
+            and target_type = #{targetType}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+        order by sort_num desc, update_time desc, id desc
+        limit #{offset}, #{limit}
+    </select>
+
+    <select id="countPage" resultType="java.lang.Long">
+        select count(1)
+        from home_recommend
+        where 1 = 1
+        <if test="positionCode != null and positionCode != ''">
+            and position_code = #{positionCode}
+        </if>
+        <if test="targetType != null and targetType != ''">
+            and target_type = #{targetType}
+        </if>
+        <if test="status != null and status != ''">
+            and status = #{status}
+        </if>
+    </select>
+
+    <select id="selectById" resultType="com.yinyu.entity.po.HomeRecommend">
+        select
+        <include refid="BaseColumns"/>
+        from home_recommend
+        where id = #{id}
+        limit 1
+    </select>
+
+    <select id="countByPositionAndTarget" resultType="java.lang.Integer">
+        select count(1)
+        from home_recommend
+        where position_code = #{positionCode}
+          and target_type = #{targetType}
+          and target_id = #{targetId}
+        <if test="excludeId != null">
+            and id != #{excludeId}
+        </if>
+    </select>
+
+    <select id="selectMaxSortNum" resultType="java.lang.Integer">
+        select ifnull(max(sort_num), 0)
+        from home_recommend
+        where position_code = #{positionCode}
+    </select>
+
+    <insert id="insert" parameterType="com.yinyu.entity.po.HomeRecommend" useGeneratedKeys="true" keyProperty="id">
+        insert into home_recommend(position_code, target_type, target_id, cover, sort_num, status)
+        values(#{positionCode}, #{targetType}, #{targetId}, #{cover}, #{sortNum}, #{status})
+    </insert>
+
+    <update id="update" parameterType="com.yinyu.entity.po.HomeRecommend">
+        update home_recommend
+        set position_code = #{positionCode},
+            target_type = #{targetType},
+            target_id = #{targetId},
+            cover = #{cover},
+            sort_num = #{sortNum},
+            status = #{status}
+        where id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        delete from home_recommend
+        where id = #{id}
+    </delete>
+
+    <update id="updateStatus">
+        update home_recommend
+        set status = #{status}
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <update id="updateSort">
+        update home_recommend
+        set sort_num = #{sortNum}
+        where id = #{id}
+    </update>
+
+    <select id="selectEnabledByPosition" resultType="com.yinyu.entity.po.HomeRecommend">
+        select
+        <include refid="BaseColumns"/>
+        from home_recommend
+        where position_code = #{positionCode}
+          and status = 'enabled'
+        order by sort_num desc, update_time desc, id desc
+    </select>
+
+    <select id="countEnabledByPosition" resultType="java.lang.Long">
+        select count(1)
+        from home_recommend
+        where position_code = #{positionCode}
+          and status = 'enabled'
+    </select>
+
+</mapper>

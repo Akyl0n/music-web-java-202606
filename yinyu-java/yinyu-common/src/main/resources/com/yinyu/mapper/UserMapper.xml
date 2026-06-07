@@ -1,0 +1,173 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.yinyu.mapper.UserMapper">
+
+    <sql id="BaseColumns">
+        id, password, nickname, avatar, gender, email, signature, status,
+        last_login_time, remark, create_time, update_time
+    </sql>
+
+    <sql id="AdminColumns">
+        u.id,
+        u.nickname,
+        u.avatar,
+        u.gender,
+        u.email,
+        u.signature,
+        u.status,
+        u.remark,
+        u.last_login_time,
+        u.create_time,
+        u.update_time,
+        (
+            select count(1) from user_action ua
+            where ua.user_id = u.id
+              and ua.action_type = 'like_song'
+        ) as like_song_count,
+        (
+            select count(1) from user_action ua
+            where ua.user_id = u.id
+              and ua.action_type = 'favorite_playlist'
+        ) as favorite_playlist_count,
+        (
+            select count(1) from user_action ua
+            where ua.user_id = u.id
+              and ua.action_type = 'play_song'
+        ) as play_history_count
+    </sql>
+
+    <select id="selectById" resultType="com.yinyu.entity.po.User">
+        select <include refid="BaseColumns"/>
+        from `user`
+        where id = #{id}
+        limit 1
+    </select>
+
+    <select id="selectByNickname" resultType="com.yinyu.entity.po.User">
+        select <include refid="BaseColumns"/>
+        from `user`
+        where nickname = #{nickname}
+        limit 1
+    </select>
+
+    <select id="selectByEmail" resultType="com.yinyu.entity.po.User">
+        select <include refid="BaseColumns"/>
+        from `user`
+        where email = #{email}
+        limit 1
+    </select>
+
+    <select id="selectByLoginName" resultType="com.yinyu.entity.po.User">
+        select <include refid="BaseColumns"/>
+        from `user`
+        where nickname = #{loginName}
+           or email = #{loginName}
+        limit 1
+    </select>
+
+    <insert id="insert" parameterType="com.yinyu.entity.po.User" useGeneratedKeys="true" keyProperty="id">
+        insert into `user`(
+            password, nickname, avatar, gender, email, signature, status, remark
+        ) values (
+            #{password}, #{nickname}, #{avatar}, #{gender}, #{email}, #{signature}, #{status}, #{remark}
+        )
+    </insert>
+
+    <update id="updateLastLoginTime">
+        update `user`
+        set last_login_time = now()
+        where id = #{id}
+    </update>
+
+    <update id="updateProfile" parameterType="com.yinyu.entity.po.User">
+        update `user`
+        set nickname = #{nickname},
+            avatar = #{avatar},
+            gender = #{gender},
+            email = #{email},
+            signature = #{signature}
+        where id = #{id}
+    </update>
+
+    <update id="updatePassword">
+        update `user`
+        set password = #{password}
+        where id = #{id}
+    </update>
+
+    <select id="selectAdminPage" resultType="com.yinyu.entity.vo.UserAdminVO">
+        select <include refid="AdminColumns"/>
+        from `user` u
+        where 1 = 1
+        <if test="keyword != null and keyword != ''">
+            and (
+                u.nickname like concat('%', #{keyword}, '%')
+                or u.email like concat('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="gender != null and gender != ''">
+            and u.gender = #{gender}
+        </if>
+        <if test="status != null and status != ''">
+            and u.status = #{status}
+        </if>
+        order by u.update_time desc, u.id desc
+        limit #{offset}, #{limit}
+    </select>
+
+    <select id="countAdminPage" resultType="java.lang.Long">
+        select count(1)
+        from `user` u
+        where 1 = 1
+        <if test="keyword != null and keyword != ''">
+            and (
+                u.nickname like concat('%', #{keyword}, '%')
+                or u.email like concat('%', #{keyword}, '%')
+            )
+        </if>
+        <if test="gender != null and gender != ''">
+            and u.gender = #{gender}
+        </if>
+        <if test="status != null and status != ''">
+            and u.status = #{status}
+        </if>
+    </select>
+
+    <select id="selectAdminDetail" resultType="com.yinyu.entity.vo.UserAdminVO">
+        select <include refid="AdminColumns"/>
+        from `user` u
+        where u.id = #{id}
+        limit 1
+    </select>
+
+    <update id="updateAdmin" parameterType="com.yinyu.entity.po.User">
+        update `user`
+        set nickname = #{nickname},
+            avatar = #{avatar},
+            gender = #{gender},
+            email = #{email},
+            signature = #{signature},
+            status = #{status},
+            remark = #{remark}
+        where id = #{id}
+    </update>
+
+    <update id="updateStatus">
+        update `user`
+        set status = #{status}
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </update>
+
+    <select id="countRecentLogin" resultType="java.lang.Long">
+        select count(1)
+        from `user`
+        where last_login_time is not null
+          and last_login_time >= date_sub(now(), interval #{days} day)
+    </select>
+
+</mapper>
