@@ -8,7 +8,10 @@ import com.yinyu.entity.vo.DictTreeVO;
 import com.yinyu.entity.vo.DictTypeVO;
 import com.yinyu.exception.BusinessException;
 import com.yinyu.mapper.SysDictMapper;
+import com.yinyu.config.RedisCacheConfig;
 import com.yinyu.service.DictService;
+import org.springframework.cache.annotation.CacheEvict;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -47,6 +50,7 @@ public class DictServiceImpl implements DictService {
     }
 
     @Override
+    @CacheEvict(cacheNames = {RedisCacheConfig.CACHE_DICT_TREE, RedisCacheConfig.CACHE_DICT_TYPES, RedisCacheConfig.CACHE_DICT_ITEMS}, allEntries = true)
     @Transactional(rollbackFor = Exception.class)
     public void createType(DictTypeSaveRequest request) {
         validateCodeUnique(ROOT_PARENT_ID, request.getCode(), null);
@@ -61,6 +65,7 @@ public class DictServiceImpl implements DictService {
     }
 
     @Override
+    @CacheEvict(cacheNames = {RedisCacheConfig.CACHE_DICT_TREE, RedisCacheConfig.CACHE_DICT_TYPES, RedisCacheConfig.CACHE_DICT_ITEMS}, allEntries = true)
     @Transactional(rollbackFor = Exception.class)
     public void updateType(DictTypeSaveRequest request) {
         SysDict existing = requireDict(request.getId(), "dict type not found");
@@ -76,6 +81,7 @@ public class DictServiceImpl implements DictService {
     }
 
     @Override
+    @CacheEvict(cacheNames = {RedisCacheConfig.CACHE_DICT_TREE, RedisCacheConfig.CACHE_DICT_TYPES, RedisCacheConfig.CACHE_DICT_ITEMS}, allEntries = true)
     @Transactional(rollbackFor = Exception.class)
     public void deleteType(Long id) {
         SysDict existing = requireDict(id, "dict type not found");
@@ -87,6 +93,7 @@ public class DictServiceImpl implements DictService {
     }
 
     @Override
+    @CacheEvict(cacheNames = {RedisCacheConfig.CACHE_DICT_TREE, RedisCacheConfig.CACHE_DICT_TYPES, RedisCacheConfig.CACHE_DICT_ITEMS}, allEntries = true)
     @Transactional(rollbackFor = Exception.class)
     public void createItem(DictItemSaveRequest request) {
         ensureTypeExists(request.getParentId());
@@ -102,6 +109,7 @@ public class DictServiceImpl implements DictService {
     }
 
     @Override
+    @CacheEvict(cacheNames = {RedisCacheConfig.CACHE_DICT_TREE, RedisCacheConfig.CACHE_DICT_TYPES, RedisCacheConfig.CACHE_DICT_ITEMS}, allEntries = true)
     @Transactional(rollbackFor = Exception.class)
     public void updateItem(DictItemSaveRequest request) {
         SysDict existing = requireDict(request.getId(), "dict item not found");
@@ -119,6 +127,7 @@ public class DictServiceImpl implements DictService {
     }
 
     @Override
+    @CacheEvict(cacheNames = {RedisCacheConfig.CACHE_DICT_TREE, RedisCacheConfig.CACHE_DICT_TYPES, RedisCacheConfig.CACHE_DICT_ITEMS}, allEntries = true)
     @Transactional(rollbackFor = Exception.class)
     public void deleteItem(Long id) {
         SysDict existing = requireDict(id, "dict item not found");
@@ -129,6 +138,7 @@ public class DictServiceImpl implements DictService {
     }
 
     @Override
+    @CacheEvict(cacheNames = {RedisCacheConfig.CACHE_DICT_TREE, RedisCacheConfig.CACHE_DICT_TYPES, RedisCacheConfig.CACHE_DICT_ITEMS}, allEntries = true)
     @Transactional(rollbackFor = Exception.class)
     public void sortTypes(DictSortRequest request) {
         if (CollectionUtils.isEmpty(request.getIds())) {
@@ -145,6 +155,7 @@ public class DictServiceImpl implements DictService {
     }
 
     @Override
+    @CacheEvict(cacheNames = {RedisCacheConfig.CACHE_DICT_TREE, RedisCacheConfig.CACHE_DICT_TYPES, RedisCacheConfig.CACHE_DICT_ITEMS}, allEntries = true)
     @Transactional(rollbackFor = Exception.class)
     public void sortItems(DictSortRequest request) {
         ensureTypeExists(request.getParentId());
@@ -162,6 +173,7 @@ public class DictServiceImpl implements DictService {
     }
 
     @Override
+    @Cacheable(cacheNames = RedisCacheConfig.CACHE_DICT_TREE, key = "#code == null ? 'all' : #code")
     public List<DictTreeVO> listEnabledTree(String code) {
         List<SysDict> typeList = sysDictMapper.selectEnabledTypes(code);
         List<DictTreeVO> result = new ArrayList<>(typeList.size());
@@ -178,6 +190,7 @@ public class DictServiceImpl implements DictService {
     }
 
     @Override
+    @Cacheable(cacheNames = RedisCacheConfig.CACHE_DICT_TYPES, key = "#code == null ? 'all' : #code")
     public List<DictTypeVO> listEnabledTypes(String code) {
         return sysDictMapper.selectEnabledTypes(code)
                 .stream()
@@ -186,6 +199,7 @@ public class DictServiceImpl implements DictService {
     }
 
     @Override
+    @Cacheable(cacheNames = RedisCacheConfig.CACHE_DICT_ITEMS, key = "(#parentId == null ? 'none' : #parentId) + ':' + (#typeCode == null ? 'none' : #typeCode)")
     public List<DictItemVO> listEnabledItems(Long parentId, String typeCode) {
         if (parentId == null && !StringUtils.hasText(typeCode)) {
             throw new BusinessException("parentId and typeCode can not both be empty");

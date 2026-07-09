@@ -6,6 +6,7 @@ const STORAGE_KEY = 'yinyu-admin-session'
 const service = axios.create({
   baseURL: '/api',
   timeout: 10000,
+  withCredentials: true,
 })
 
 service.interceptors.response.use(

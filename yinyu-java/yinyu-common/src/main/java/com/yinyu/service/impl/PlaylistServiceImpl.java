@@ -1,6 +1,7 @@
 package com.yinyu.service.impl;
 
 import com.yinyu.api.ListData;
+import com.yinyu.config.RedisCacheConfig;
 import com.yinyu.entity.dto.PlaylistQueryRequest;
 import com.yinyu.entity.dto.PlaylistSaveRequest;
 import com.yinyu.entity.dto.PlaylistStatusRequest;
@@ -17,6 +18,9 @@ import com.yinyu.mapper.PlaylistMapper;
 import com.yinyu.mapper.SingerMapper;
 import com.yinyu.mapper.SongMapper;
 import com.yinyu.service.DictService;
+import com.yinyu.search.SearchIndexService;
+import com.yinyu.search.SearchPage;
+import com.yinyu.service.InfrastructureEventPublisher;
 import com.yinyu.service.PlaylistService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,18 +39,32 @@ public class PlaylistServiceImpl implements PlaylistService {
     private final SongMapper songMapper;
     private final SingerMapper singerMapper;
     private final DictService dictService;
+    private final SearchIndexService searchIndexService;
+    private final InfrastructureEventPublisher eventPublisher;
 
-    public PlaylistServiceImpl(PlaylistMapper playlistMapper, SongMapper songMapper, SingerMapper singerMapper, DictService dictService) {
+    public PlaylistServiceImpl(PlaylistMapper playlistMapper, SongMapper songMapper, SingerMapper singerMapper, DictService dictService, SearchIndexService searchIndexService, InfrastructureEventPublisher eventPublisher) {
         this.playlistMapper = playlistMapper;
         this.songMapper = songMapper;
         this.singerMapper = singerMapper;
         this.dictService = dictService;
+        this.searchIndexService = searchIndexService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
     public ListData<PlaylistVO> listPage(PlaylistQueryRequest request) {
         PlaylistQueryRequest query = request == null ? new PlaylistQueryRequest() : request;
         Map<String, String> categoryNameMap = buildCategoryNameMap();
+        SearchPage searchPage = searchIndexService.searchPlaylists(query);
+        if (searchPage != null) {
+            Map<Long, Integer> orderMap = createOrderMap(searchPage.ids());
+            List<PlaylistVO> searchList = searchPage.ids().isEmpty() ? List.of() : playlistMapper.selectByIds(searchPage.ids())
+                    .stream()
+                    .sorted((left, right) -> Integer.compare(orderMap.getOrDefault(left.getId(), Integer.MAX_VALUE), orderMap.getOrDefault(right.getId(), Integer.MAX_VALUE)))
+                    .map(entity -> toVO(entity, false, categoryNameMap))
+                    .toList();
+            return new ListData<>(searchList, searchPage.total());
+        }
         List<PlaylistVO> list = playlistMapper.selectPage(query)
             .stream()
             .map(entity -> toVO(entity, false, categoryNameMap))
@@ -92,6 +110,7 @@ public class PlaylistServiceImpl implements PlaylistService {
         fillPlaylist(entity, request, songIds);
         playlistMapper.insert(entity);
         savePlaylistSongs(entity.getId(), songIds);
+        publishPlaylistChanged(entity.getId(), "upsert");
     }
 
     @Override
@@ -107,6 +126,7 @@ public class PlaylistServiceImpl implements PlaylistService {
         fillPlaylist(existing, request, songIds);
         playlistMapper.update(existing);
         savePlaylistSongs(existing.getId(), songIds);
+        publishPlaylistChanged(existing.getId(), "upsert");
     }
 
     @Override
@@ -115,6 +135,7 @@ public class PlaylistServiceImpl implements PlaylistService {
         requirePlaylist(id);
         playlistMapper.deletePlaylistSongsByPlaylistId(id);
         playlistMapper.deleteById(id);
+        publishPlaylistChanged(id, "delete");
     }
 
     @Override
@@ -125,6 +146,12 @@ public class PlaylistServiceImpl implements PlaylistService {
         }
         request.getIds().forEach(this::requirePlaylist);
         playlistMapper.updateStatus(request.getIds(), request.getStatus().trim());
+        request.getIds().forEach(id -> publishPlaylistChanged(id, "upsert"));
+    }
+
+    private void publishPlaylistChanged(Long id, String action) {
+        eventPublisher.publishContentChanged(SearchIndexService.TYPE_PLAYLIST, id, action);
+        eventPublisher.publishCacheInvalidation(List.of(RedisCacheConfig.CACHE_HOME_PAGE));
     }
 
     private void fillPlaylist(Playlist entity, PlaylistSaveRequest request, List<Long> songIds) {

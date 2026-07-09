@@ -83,6 +83,15 @@
         limit 1
     </select>
 
+    <select id="selectByIds" resultType="com.yinyu.entity.po.Singer">
+        select <include refid="BaseColumns"/>
+        from artist
+        where id in
+        <foreach collection="ids" item="id" open="(" separator="," close=")">
+            #{id}
+        </foreach>
+    </select>
+
     <select id="selectEnabledHomeList" resultType="com.yinyu.entity.po.Singer">
         select <include refid="BaseColumns"/>
         from artist

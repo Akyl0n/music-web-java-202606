@@ -2,9 +2,42 @@ server:
   port: 6061
   servlet:
     context-path: /api
+    session:
+      cookie:
+        name: YINYU_ADMIN_SESSION
+        max-age: 604800
   tomcat:
     max-swallow-size: -1
 spring:
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 3s
+    elasticsearch:
+      repositories:
+        enabled: true
+  elasticsearch:
+    uris: http://localhost:9200
+    connection-timeout: 3s
+    socket-timeout: 5s
+  session:
+    store-type: redis
+    timeout: 7d
+    redis:
+      namespace: yinyu:admin:session
+  cache:
+    type: redis
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      auto-offset-reset: earliest
   servlet:
     multipart:
       max-file-size: 20MB
@@ -18,6 +51,9 @@ spring:
     scheduling:
       pool:
         size: 5
+yinyu:
+  kafka:
+    enabled: false
 mybatis:
   mapper-locations: classpath*:mapper/*.xml
   configuration:

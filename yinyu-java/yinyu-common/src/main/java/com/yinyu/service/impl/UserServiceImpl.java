@@ -2,6 +2,7 @@ package com.yinyu.service.impl;
 
 import com.wf.captcha.SpecCaptcha;
 import com.yinyu.api.ListData;
+import com.yinyu.config.RedisCacheConfig;
 import com.yinyu.entity.dto.UserAdminPasswordResetRequest;
 import com.yinyu.entity.dto.UserAdminQueryRequest;
 import com.yinyu.entity.dto.UserAdminSaveRequest;
@@ -32,7 +33,9 @@ import com.yinyu.mapper.SingerMapper;
 import com.yinyu.mapper.SongMapper;
 import com.yinyu.mapper.UserActionMapper;
 import com.yinyu.mapper.UserMapper;
+import com.yinyu.search.SearchIndexService;
 import com.yinyu.service.DictService;
+import com.yinyu.service.InfrastructureEventPublisher;
 import com.yinyu.service.UserService;
 import jakarta.servlet.http.HttpSession;
 import org.springframework.stereotype.Service;
@@ -62,14 +65,16 @@ public class UserServiceImpl implements UserService {
     private final SingerMapper singerMapper;
     private final PlaylistMapper playlistMapper;
     private final DictService dictService;
+    private final InfrastructureEventPublisher eventPublisher;
 
-    public UserServiceImpl(UserMapper userMapper, UserActionMapper userActionMapper, SongMapper songMapper, SingerMapper singerMapper, PlaylistMapper playlistMapper, DictService dictService) {
+    public UserServiceImpl(UserMapper userMapper, UserActionMapper userActionMapper, SongMapper songMapper, SingerMapper singerMapper, PlaylistMapper playlistMapper, DictService dictService, InfrastructureEventPublisher eventPublisher) {
         this.userMapper = userMapper;
         this.userActionMapper = userActionMapper;
         this.songMapper = songMapper;
         this.singerMapper = singerMapper;
         this.playlistMapper = playlistMapper;
         this.dictService = dictService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -245,6 +250,7 @@ public class UserServiceImpl implements UserService {
         }
         insertAction(user.getId(), actionType, request.getSongId(), request.getProgressSeconds());
         songMapper.updateLikeCount(request.getSongId(), 1);
+        publishSongMetricChanged(request.getSongId());
     }
 
     @Override
@@ -255,6 +261,7 @@ public class UserServiceImpl implements UserService {
         int deleted = userActionMapper.deleteByUserIdAndTypeAndTargetId(user.getId(), UserActionTypeEnum.LIKE_SONG.getCode(), songId);
         if (deleted > 0) {
             songMapper.updateLikeCount(songId, -1);
+            publishSongMetricChanged(songId);
         }
     }
 
@@ -270,6 +277,7 @@ public class UserServiceImpl implements UserService {
         }
         insertAction(user.getId(), actionType, request.getPlaylistId(), null);
         playlistMapper.updateFavoriteCount(request.getPlaylistId(), 1);
+        publishPlaylistMetricChanged(request.getPlaylistId());
     }
 
     @Override
@@ -280,6 +288,7 @@ public class UserServiceImpl implements UserService {
         int deleted = userActionMapper.deleteByUserIdAndTypeAndTargetId(user.getId(), UserActionTypeEnum.FAVORITE_PLAYLIST.getCode(), playlistId);
         if (deleted > 0) {
             playlistMapper.updateFavoriteCount(playlistId, -1);
+            publishPlaylistMetricChanged(playlistId);
         }
     }
 
@@ -298,6 +307,17 @@ public class UserServiceImpl implements UserService {
             userActionMapper.updateAction(action);
         }
         songMapper.updatePlayCount(request.getSongId(), 1);
+        publishSongMetricChanged(request.getSongId());
+    }
+
+    private void publishSongMetricChanged(Long songId) {
+        eventPublisher.publishContentChanged(SearchIndexService.TYPE_SONG, songId, "upsert");
+        eventPublisher.publishCacheInvalidation(List.of(RedisCacheConfig.CACHE_HOME_PAGE, RedisCacheConfig.CACHE_RANKING_BOARDS, RedisCacheConfig.CACHE_RANKING_DETAIL));
+    }
+
+    private void publishPlaylistMetricChanged(Long playlistId) {
+        eventPublisher.publishContentChanged(SearchIndexService.TYPE_PLAYLIST, playlistId, "upsert");
+        eventPublisher.publishCacheInvalidation(List.of(RedisCacheConfig.CACHE_HOME_PAGE));
     }
 
     private void validateUserUnique(String nickname, String email) {

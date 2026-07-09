@@ -1,5 +1,6 @@
 package com.yinyu.service.impl;
 
+import com.yinyu.config.RedisCacheConfig;
 import com.yinyu.entity.po.Playlist;
 import com.yinyu.entity.po.Singer;
 import com.yinyu.entity.po.Song;
@@ -16,6 +17,7 @@ import com.yinyu.mapper.SongMapper;
 import com.yinyu.service.DictService;
 import com.yinyu.service.HomeRecommendService;
 import com.yinyu.service.HomeService;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
@@ -63,6 +65,7 @@ public class HomeServiceImpl implements HomeService {
     }
 
     @Override
+    @Cacheable(cacheNames = RedisCacheConfig.CACHE_HOME_PAGE, key = "'default'")
     public HomePageVO getHomePage() {
         Map<String, String> categoryNameMap = buildCategoryNameMap();
         List<Playlist> playlistEntities = playlistMapper.selectEnabledHomeList(24);

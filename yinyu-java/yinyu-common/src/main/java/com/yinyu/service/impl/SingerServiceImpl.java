@@ -1,6 +1,7 @@
 package com.yinyu.service.impl;
 
 import com.yinyu.api.ListData;
+import com.yinyu.config.RedisCacheConfig;
 import com.yinyu.entity.dto.SingerQueryRequest;
 import com.yinyu.entity.dto.SingerSaveRequest;
 import com.yinyu.entity.dto.SingerStatusRequest;
@@ -8,26 +9,45 @@ import com.yinyu.entity.po.Singer;
 import com.yinyu.entity.vo.SingerVO;
 import com.yinyu.exception.BusinessException;
 import com.yinyu.mapper.SingerMapper;
+import com.yinyu.search.SearchIndexService;
+import com.yinyu.search.SearchPage;
+import com.yinyu.service.InfrastructureEventPublisher;
 import com.yinyu.service.SingerService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 @Service
 public class SingerServiceImpl implements SingerService {
 
     private final SingerMapper singerMapper;
+    private final SearchIndexService searchIndexService;
+    private final InfrastructureEventPublisher eventPublisher;
 
-    public SingerServiceImpl(SingerMapper singerMapper) {
+    public SingerServiceImpl(SingerMapper singerMapper, SearchIndexService searchIndexService, InfrastructureEventPublisher eventPublisher) {
         this.singerMapper = singerMapper;
+        this.searchIndexService = searchIndexService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
     public ListData<SingerVO> listPage(SingerQueryRequest request) {
         SingerQueryRequest query = request == null ? new SingerQueryRequest() : request;
+        SearchPage searchPage = searchIndexService.searchSingers(query);
+        if (searchPage != null) {
+            Map<Long, Integer> orderMap = createOrderMap(searchPage.ids());
+            List<SingerVO> searchList = searchPage.ids().isEmpty() ? List.of() : singerMapper.selectByIds(searchPage.ids())
+                    .stream()
+                    .sorted((left, right) -> Integer.compare(orderMap.getOrDefault(left.getId(), Integer.MAX_VALUE), orderMap.getOrDefault(right.getId(), Integer.MAX_VALUE)))
+                    .map(this::toVO)
+                    .toList();
+            return new ListData<>(searchList, searchPage.total());
+        }
         List<SingerVO> list = singerMapper.selectPage(query).stream().map(this::toVO).toList();
         Long total = singerMapper.countPage(query);
         return new ListData<>(list, total == null ? 0L : total);
@@ -45,6 +65,7 @@ public class SingerServiceImpl implements SingerService {
         Singer entity = new Singer();
         fillSinger(entity, request);
         singerMapper.insert(entity);
+        publishSingerChanged(entity.getId(), "upsert");
     }
 
     @Override
@@ -57,6 +78,7 @@ public class SingerServiceImpl implements SingerService {
         validateNameUnique(request.getName(), request.getId());
         fillSinger(existing, request);
         singerMapper.update(existing);
+        publishSingerChanged(existing.getId(), "upsert");
     }
 
     @Override
@@ -64,6 +86,7 @@ public class SingerServiceImpl implements SingerService {
     public void delete(Long id) {
         requireSinger(id);
         singerMapper.deleteById(id);
+        publishSingerChanged(id, "delete");
     }
 
     @Override
@@ -74,6 +97,20 @@ public class SingerServiceImpl implements SingerService {
         }
         request.getIds().forEach(this::requireSinger);
         singerMapper.updateStatus(request.getIds(), request.getStatus().trim());
+        request.getIds().forEach(id -> publishSingerChanged(id, "upsert"));
+    }
+
+    private void publishSingerChanged(Long id, String action) {
+        eventPublisher.publishContentChanged(SearchIndexService.TYPE_SINGER, id, action);
+        eventPublisher.publishCacheInvalidation(List.of(RedisCacheConfig.CACHE_HOME_PAGE));
+    }
+
+    private Map<Long, Integer> createOrderMap(List<Long> ids) {
+        Map<Long, Integer> orderMap = new LinkedHashMap<>();
+        for (int index = 0; index < ids.size(); index++) {
+            orderMap.put(ids.get(index), index);
+        }
+        return orderMap;
     }
 
     private void fillSinger(Singer entity, SingerSaveRequest request) {

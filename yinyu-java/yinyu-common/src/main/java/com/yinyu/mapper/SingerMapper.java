@@ -14,6 +14,8 @@ public interface SingerMapper {
 
     Singer selectById(@Param("id") Long id);
 
+    List<Singer> selectByIds(@Param("ids") List<Long> ids);
+
     List<Singer> selectEnabledHomeList(@Param("limit") int limit);
 
     Integer countByName(@Param("name") String name, @Param("excludeId") Long excludeId);

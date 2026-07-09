@@ -12,8 +12,12 @@ import com.yinyu.entity.vo.SongVO;
 import com.yinyu.exception.BusinessException;
 import com.yinyu.mapper.SingerMapper;
 import com.yinyu.mapper.SongMapper;
+import com.yinyu.search.SearchIndexService;
+import com.yinyu.search.SearchPage;
+import com.yinyu.service.InfrastructureEventPublisher;
 import com.yinyu.service.DictService;
 import com.yinyu.service.SongService;
+import com.yinyu.config.RedisCacheConfig;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -29,11 +33,15 @@ public class SongServiceImpl implements SongService {
     private final SongMapper songMapper;
     private final SingerMapper singerMapper;
     private final DictService dictService;
+    private final SearchIndexService searchIndexService;
+    private final InfrastructureEventPublisher eventPublisher;
 
-    public SongServiceImpl(SongMapper songMapper, SingerMapper singerMapper, DictService dictService) {
+    public SongServiceImpl(SongMapper songMapper, SingerMapper singerMapper, DictService dictService, SearchIndexService searchIndexService, InfrastructureEventPublisher eventPublisher) {
         this.songMapper = songMapper;
         this.singerMapper = singerMapper;
         this.dictService = dictService;
+        this.searchIndexService = searchIndexService;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -41,6 +49,16 @@ public class SongServiceImpl implements SongService {
         SongQueryRequest query = request == null ? new SongQueryRequest() : request;
         Map<String, String> categoryNameMap = buildCategoryNameMap();
         Map<Long, String> singerAvatarMap = new LinkedHashMap<>();
+        SearchPage searchPage = searchIndexService.searchSongs(query);
+        if (searchPage != null) {
+            Map<Long, Integer> orderMap = createOrderMap(searchPage.ids());
+            List<SongVO> searchList = searchPage.ids().isEmpty() ? List.of() : songMapper.selectByIds(searchPage.ids())
+                    .stream()
+                    .sorted((left, right) -> Integer.compare(orderMap.getOrDefault(left.getId(), Integer.MAX_VALUE), orderMap.getOrDefault(right.getId(), Integer.MAX_VALUE)))
+                    .map(item -> toVO(item, categoryNameMap, singerAvatarMap))
+                    .toList();
+            return new ListData<>(searchList, searchPage.total());
+        }
         List<SongVO> list = songMapper.selectPage(query)
             .stream()
             .map(item -> toVO(item, categoryNameMap, singerAvatarMap))
@@ -57,6 +75,7 @@ public class SongServiceImpl implements SongService {
         Song entity = new Song();
         fillSong(entity, request, singer);
         songMapper.insert(entity);
+        publishSongChanged(entity.getId(), "upsert");
     }
 
     @Override
@@ -70,6 +89,7 @@ public class SongServiceImpl implements SongService {
         validateNameUnique(request.getName(), request.getSingerId(), request.getId());
         fillSong(existing, request, singer);
         songMapper.update(existing);
+        publishSongChanged(existing.getId(), "upsert");
     }
 
     @Override
@@ -77,6 +97,7 @@ public class SongServiceImpl implements SongService {
     public void delete(Long id) {
         requireSong(id);
         songMapper.deleteById(id);
+        publishSongChanged(id, "delete");
     }
 
     @Override
@@ -87,6 +108,20 @@ public class SongServiceImpl implements SongService {
         }
         request.getIds().forEach(this::requireSong);
         songMapper.updateStatus(request.getIds(), request.getStatus().trim());
+        request.getIds().forEach(id -> publishSongChanged(id, "upsert"));
+    }
+
+    private void publishSongChanged(Long id, String action) {
+        eventPublisher.publishContentChanged(SearchIndexService.TYPE_SONG, id, action);
+        eventPublisher.publishCacheInvalidation(List.of(RedisCacheConfig.CACHE_HOME_PAGE, RedisCacheConfig.CACHE_RANKING_BOARDS, RedisCacheConfig.CACHE_RANKING_DETAIL));
+    }
+
+    private Map<Long, Integer> createOrderMap(List<Long> ids) {
+        Map<Long, Integer> orderMap = new LinkedHashMap<>();
+        for (int index = 0; index < ids.size(); index++) {
+            orderMap.put(ids.get(index), index);
+        }
+        return orderMap;
     }
 
     private void fillSong(Song entity, SongSaveRequest request, Singer singer) {

@@ -1,5 +1,6 @@
 package com.yinyu.service.impl;
 
+import com.yinyu.config.RedisCacheConfig;
 import com.yinyu.entity.enums.DictCodeEnum;
 import com.yinyu.entity.po.Singer;
 import com.yinyu.entity.po.Song;
@@ -12,15 +13,18 @@ import com.yinyu.mapper.SingerMapper;
 import com.yinyu.mapper.SongMapper;
 import com.yinyu.service.DictService;
 import com.yinyu.service.RankingService;
+import com.yinyu.service.ranking.RankingStrategy;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 @Service
 public class RankingServiceImpl implements RankingService {
@@ -30,26 +34,32 @@ public class RankingServiceImpl implements RankingService {
     private final SongMapper songMapper;
     private final SingerMapper singerMapper;
     private final DictService dictService;
+    private final List<RankingStrategy> rankingStrategies;
+    private final Map<String, RankingStrategy> rankingStrategyMap;
 
-    public RankingServiceImpl(SongMapper songMapper, SingerMapper singerMapper, DictService dictService) {
+    public RankingServiceImpl(SongMapper songMapper, SingerMapper singerMapper, DictService dictService, List<RankingStrategy> rankingStrategies) {
         this.songMapper = songMapper;
         this.singerMapper = singerMapper;
         this.dictService = dictService;
+        this.rankingStrategies = rankingStrategies;
+        this.rankingStrategyMap = rankingStrategies.stream()
+                .collect(Collectors.toUnmodifiableMap(RankingStrategy::code, Function.identity()));
     }
 
     @Override
+    @Cacheable(cacheNames = RedisCacheConfig.CACHE_RANKING_BOARDS, key = "'all'")
     public List<RankingBoardVO> listBoards() {
         List<Song> songs = songMapper.selectEnabledRankingList();
-        return List.of(
-            buildBoard("hot", "实时热播", "根据站内当前播放热度、收藏热度与推荐状态综合排序，适合快速发现当下最热门的作品。", songs),
-            buildBoard("new", "新歌榜", "聚焦近期上新的古风作品，优先展示近阶段发布且热度持续上升的歌曲。", songs),
-            buildBoard("favorite", "收藏榜", "按喜欢与收藏热度排序，更偏长期耐听和反复回访的内容。", songs)
-        );
+        return rankingStrategies.stream()
+            .map(strategy -> buildBoard(strategy, songs))
+            .toList();
     }
 
     @Override
+    @Cacheable(cacheNames = RedisCacheConfig.CACHE_RANKING_DETAIL, key = "#boardCode == null ? 'hot' : #boardCode")
     public RankingDetailVO getDetail(String boardCode) {
         String normalizedCode = StringUtils.hasText(boardCode) ? boardCode.trim().toLowerCase() : "hot";
+        RankingStrategy strategy = requireStrategy(normalizedCode);
         List<Song> songs = songMapper.selectEnabledRankingList();
         RankingBoardVO currentBoard = listBoards().stream()
             .filter(item -> item.getCode().equals(normalizedCode))
@@ -58,7 +68,7 @@ public class RankingServiceImpl implements RankingService {
 
         Map<String, String> categoryNameMap = buildCategoryNameMap();
         Map<Long, String> singerAvatarMap = new LinkedHashMap<>();
-        List<SongVO> rankingSongs = sortSongs(normalizedCode, songs).stream()
+        List<SongVO> rankingSongs = strategy.sort(songs).stream()
             .limit(MAX_RANK_SIZE)
             .map(item -> toSongVO(item, categoryNameMap, singerAvatarMap))
             .toList();
@@ -70,42 +80,22 @@ public class RankingServiceImpl implements RankingService {
         return vo;
     }
 
-    private RankingBoardVO buildBoard(String code, String name, String note, List<Song> songs) {
+    private RankingBoardVO buildBoard(RankingStrategy strategy, List<Song> songs) {
         RankingBoardVO vo = new RankingBoardVO();
-        vo.setCode(code);
-        vo.setName(name);
-        vo.setNote(note);
-        vo.setTotalSongs(Math.min(sortSongs(code, songs).size(), MAX_RANK_SIZE));
+        vo.setCode(strategy.code());
+        vo.setName(strategy.name());
+        vo.setNote(strategy.note());
+        vo.setTotalSongs(Math.min(strategy.sort(songs).size(), MAX_RANK_SIZE));
         vo.setUpdateText(resolveUpdateText(songs));
         return vo;
     }
 
-    private List<Song> sortSongs(String boardCode, List<Song> songs) {
-        Comparator<Song> comparator;
-        switch (boardCode) {
-            case "new" -> comparator = Comparator
-                .comparing(Song::getReleaseDate, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getRecommendFlag, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getPlayCount, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getUpdateTime, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getId, Comparator.nullsLast(Comparator.reverseOrder()));
-            case "favorite" -> comparator = Comparator
-                .comparing(Song::getFavoriteCount, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getLikeCount, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getPlayCount, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getRecommendFlag, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getUpdateTime, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getId, Comparator.nullsLast(Comparator.reverseOrder()));
-            case "hot" -> comparator = Comparator
-                .comparing(Song::getPlayCount, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getFavoriteCount, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getLikeCount, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getRecommendFlag, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getUpdateTime, Comparator.nullsLast(Comparator.reverseOrder()))
-                .thenComparing(Song::getId, Comparator.nullsLast(Comparator.reverseOrder()));
-            default -> throw new BusinessException("ranking board not found");
+    private RankingStrategy requireStrategy(String boardCode) {
+        RankingStrategy strategy = rankingStrategyMap.get(boardCode);
+        if (strategy == null) {
+            throw new BusinessException("ranking board not found");
         }
-        return songs.stream().sorted(comparator).toList();
+        return strategy;
     }
 
     private Map<String, String> buildCategoryNameMap() {

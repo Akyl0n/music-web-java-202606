@@ -1,6 +1,7 @@
 package com.yinyu.service.impl;
 
 import com.yinyu.api.ListData;
+import com.yinyu.config.RedisCacheConfig;
 import com.yinyu.entity.dto.HomeRecommendQueryRequest;
 import com.yinyu.entity.dto.HomeRecommendSaveRequest;
 import com.yinyu.entity.dto.HomeRecommendSortRequest;
@@ -17,6 +18,7 @@ import com.yinyu.mapper.PlaylistMapper;
 import com.yinyu.mapper.SingerMapper;
 import com.yinyu.mapper.SongMapper;
 import com.yinyu.service.HomeRecommendService;
+import com.yinyu.service.InfrastructureEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
@@ -37,17 +39,20 @@ public class HomeRecommendServiceImpl implements HomeRecommendService {
     private final SongMapper songMapper;
     private final PlaylistMapper playlistMapper;
     private final SingerMapper singerMapper;
+    private final InfrastructureEventPublisher eventPublisher;
 
     public HomeRecommendServiceImpl(
             HomeRecommendMapper homeRecommendMapper,
             SongMapper songMapper,
             PlaylistMapper playlistMapper,
-            SingerMapper singerMapper
+            SingerMapper singerMapper,
+            InfrastructureEventPublisher eventPublisher
     ) {
         this.homeRecommendMapper = homeRecommendMapper;
         this.songMapper = songMapper;
         this.playlistMapper = playlistMapper;
         this.singerMapper = singerMapper;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -74,6 +79,7 @@ public class HomeRecommendServiceImpl implements HomeRecommendService {
         fillEntity(entity, request);
         entity.setSortNum(resolveSortNum(request.getSortNum(), request.getPositionCode()));
         homeRecommendMapper.insert(entity);
+        publishHomeRecommendChanged();
     }
 
     @Override
@@ -88,6 +94,7 @@ public class HomeRecommendServiceImpl implements HomeRecommendService {
         fillEntity(existing, request);
         existing.setSortNum(request.getSortNum() != null ? request.getSortNum() : existing.getSortNum());
         homeRecommendMapper.update(existing);
+        publishHomeRecommendChanged();
     }
 
     @Override
@@ -95,6 +102,7 @@ public class HomeRecommendServiceImpl implements HomeRecommendService {
     public void delete(Long id) {
         requireRecommend(id);
         homeRecommendMapper.deleteById(id);
+        publishHomeRecommendChanged();
     }
 
     @Override
@@ -105,6 +113,7 @@ public class HomeRecommendServiceImpl implements HomeRecommendService {
         }
         request.getIds().forEach(this::requireRecommend);
         homeRecommendMapper.updateStatus(request.getIds(), request.getStatus().trim());
+        publishHomeRecommendChanged();
     }
 
     @Override
@@ -119,6 +128,11 @@ public class HomeRecommendServiceImpl implements HomeRecommendService {
             requireRecommend(id);
             homeRecommendMapper.updateSort(id, (size - index) * 10);
         }
+        publishHomeRecommendChanged();
+    }
+
+    private void publishHomeRecommendChanged() {
+        eventPublisher.publishCacheInvalidation(List.of(RedisCacheConfig.CACHE_HOME_PAGE));
     }
 
     @Override
